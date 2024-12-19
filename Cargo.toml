@@ -1,0 +1,22 @@
+[package]
+name = "lumine"
+version = "0.1.0"
+edition = "2021"
+description = "A high-level Rust interface for language models powered by the Candle ML framework."
+readme = "README.md"
+repository = "https://github.com/msk/lumine"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = []
+cuda = ["candle-core/cuda", "candle-transformers/cuda"]
+metal = ["candle-core/metal", "candle-transformers/metal"]
+
+[dependencies]
+candle-core = "0.8.1"
+candle-transformers = "0.8.1"
+tokenizers = "0.21.0"
+
+[lints.clippy]
+pedantic = "warn"
+unwrap_used = "warn"
