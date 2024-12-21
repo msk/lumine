@@ -47,17 +47,29 @@ impl Model {
         let tokenizer: Tokenizer = tokenizer_json
             .parse()
             .map_err(|e| Error::new(ErrorKind::InvalidData, format!("invalid tokenizer: {e}")))?;
+        let eos_token = gguf
+            .metadata
+            .get("tokenizer.ggml.eos_token_id")
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "missing tokenizer.ggml.eos_token_id in metadata",
+                )
+            })?
+            .to_u32()
+            .map_err(|_| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "tokenizer.ggml.eos_token_id is not a valid u32",
+                )
+            })?;
+
         let weights = ModelWeights::from_gguf(gguf, &mut file, &device).map_err(|e| {
             Error::new(
                 ErrorKind::InvalidData,
                 format!("invalid model weights: {e}"),
             )
         })?;
-
-        let eos_token = *tokenizer
-            .get_vocab(true)
-            .get("<|im_end|>")
-            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "EOS not in vocab"))?;
 
         Ok(Self {
             device,
