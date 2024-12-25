@@ -16,8 +16,10 @@ without compromising on performance.
 
 ## Notes
 
-- Currently, Lumine only supports text generation.
-- The only supported model is SmolLM2. More models will be added in the future.
+- Lumine currently supports only text generation.
+- The "llama" architecture is the only supported model architecture. There are
+  many open-weight models available with this architecture, including SmolLM2.
+  More architectures will be added in the future.
 - The GGUF file must contain the Hugging Face tokenizer in its metadata, under
   the key `tokenizer.huggingface.json`.
 - The SmolLM2 model containing the Hugging Face tokenizer can be downloaded from

@@ -15,6 +15,8 @@ metal = ["candle-core/metal", "candle-transformers/metal"]
 [dependencies]
 candle-core = "0.8.1"
 candle-transformers = "0.8.1"
+minijinja = { version = "2.5.0", features = ["loader"] }
+serde = "1.0.216"
 tokenizers = "0.21.0"
 
 [lints.clippy]

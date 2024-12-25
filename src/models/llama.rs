@@ -3,7 +3,11 @@ use candle_transformers::{
     generation::{LogitsProcessor, Sampling},
     models::quantized_llama::ModelWeights,
 };
+use minijinja::context;
+use serde::Serialize;
 use tokenizers::Tokenizer;
+
+const CHAT_TEMPLATE_NAME: &str = "chat";
 
 /// A language model that can be used for various NLP tasks.
 pub struct Model {
@@ -11,6 +15,10 @@ pub struct Model {
     tokenizer: Tokenizer,
     weights: ModelWeights,
     eos_token: u32,
+
+    /// The template environment for the chat template, stored with the name
+    /// `CHAT_TEMPLATE_NAME`.
+    template_env: minijinja::Environment<'static>,
 }
 
 impl Model {
@@ -63,6 +71,31 @@ impl Model {
                     "tokenizer.ggml.eos_token_id is not a valid u32",
                 )
             })?;
+        let chat_template = gguf
+            .metadata
+            .get("tokenizer.chat_template")
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "missing tokenizer.ggml.chat_template in metadata",
+                )
+            })?
+            .to_string()
+            .map_err(|_| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "tokenizer.ggml.chat_template is not a string",
+                )
+            })?;
+        let mut template_env = minijinja::Environment::new();
+        template_env
+            .add_template_owned(CHAT_TEMPLATE_NAME.to_string(), chat_template.to_string())
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("invalid chat template: {e}"),
+                )
+            })?;
 
         let weights = ModelWeights::from_gguf(gguf, &mut file, &device).map_err(|e| {
             Error::new(
@@ -76,6 +109,7 @@ impl Model {
             tokenizer,
             weights,
             eos_token,
+            template_env,
         })
     }
 
@@ -84,11 +118,34 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// Returns an error if the prompt contains invalid tokens.
+    /// Returns an error if the prompt cannot be tokenized. This can happen if
+    /// the model's tokenizer is unable to encode the prompt or the chat
+    /// template is invalid.
     pub fn completions(&mut self, prompt: &str) -> std::io::Result<Completions> {
         use std::io::{Error, ErrorKind};
 
-        let prompt = format!("<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",);
+        #[derive(Serialize)]
+        struct ChatMessage<'role, 'content> {
+            role: &'role str,
+            content: &'content str,
+        }
+
+        let Ok(chat_template) = self.template_env.get_template(CHAT_TEMPLATE_NAME) else {
+            unreachable!("template `CHAT_TEMPLATE_NAME` always exists")
+        };
+        let messages = vec![ChatMessage {
+            role: "user",
+            content: prompt,
+        }];
+        let prompt = chat_template
+            .render(context!(messages => messages, add_generation_prompt => true))
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("chat template doesn't conform to the expected format: {e}"),
+                )
+            })?;
+
         let tokens = self
             .tokenizer
             .encode(prompt, true)
