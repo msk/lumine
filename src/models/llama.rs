@@ -1,4 +1,4 @@
-use candle_core::{quantized::gguf_file, Device, Tensor};
+use candle_core::{quantized::gguf_file, DType, Device, Tensor};
 use candle_transformers::{
     generation::{LogitsProcessor, Sampling},
     models::quantized_llama::ModelWeights,
@@ -174,6 +174,96 @@ impl Model {
             input_pos: 0,
             last_output_pos,
         })
+    }
+
+    /// Returns the probabilities of the given tokens being the next token in the
+    /// completion of the chat starting with the given prompt.
+    ///
+    /// The n-th element in the returned vector corresponds to the probability
+    /// of the n-th token in the given `tokens` being the next token in the LLM
+    /// completion.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the question contains invalid tokens.
+    pub fn next_probabilities(
+        &mut self,
+        prompt: &str,
+        tokens: &[&str],
+    ) -> std::io::Result<Vec<f32>> {
+        use std::io::{Error, ErrorKind};
+
+        let Ok(chat_template) = self.template_env.get_template(CHAT_TEMPLATE_NAME) else {
+            unreachable!("template `CHAT_TEMPLATE_NAME` always exists")
+        };
+        let messages = vec![
+            ChatMessage {
+                role: "system",
+                content: "",
+            },
+            ChatMessage {
+                role: "user",
+                content: prompt,
+            },
+        ];
+        let prompt = chat_template
+            .render(context!(messages => messages, add_generation_prompt => true))
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("chat template doesn't conform to the expected format: {e}"),
+                )
+            })?;
+
+        let tokens = {
+            let mut token_ids = Vec::with_capacity(tokens.len());
+            for &token in tokens {
+                let token_id = *self.tokenizer.get_vocab(true).get(token).ok_or_else(|| {
+                    Error::new(ErrorKind::InvalidInput, format!("invalid token: {token}"))
+                })?;
+                token_ids.push(token_id);
+            }
+            token_ids
+        };
+
+        // Encode the question using the tokenizer
+        let tokenized_prompt = self
+            .tokenizer
+            .encode(prompt, true)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, e))?
+            .get_ids()
+            .to_vec();
+        if tokenized_prompt.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidInput, "empty question"));
+        }
+
+        let input = Tensor::new(tokenized_prompt, &self.device)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid tokens: {e}")))?
+            .unsqueeze(0)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?;
+        let logits = self
+            .weights
+            .forward(&input, 0)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?
+            .squeeze(0)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?;
+        let logits = logits
+            .to_dtype(DType::F32)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?;
+        let prs = candle_nn::ops::softmax_last_dim(&logits)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?
+            .to_vec1::<f32>()
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?;
+
+        // Calculate the probability of the answer being "yes"
+        let mut token_prs = Vec::with_capacity(tokens.len());
+        for token in tokens {
+            let p = *prs
+                .get(token as usize)
+                .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "token not in vocab"))?;
+            token_prs.push(p);
+        }
+        Ok(token_prs)
     }
 }
 
