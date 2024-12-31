@@ -9,6 +9,20 @@ use tokenizers::Tokenizer;
 
 const CHAT_TEMPLATE_NAME: &str = "chat";
 
+/// A chat message with a role and content.
+#[derive(Serialize)]
+pub struct ChatMessage<'role, 'content> {
+    role: &'role str,
+    content: &'content str,
+}
+
+impl<'role, 'content> ChatMessage<'role, 'content> {
+    /// Creates a new chat message with the specified role and content.
+    pub fn new(role: &'role str, content: &'content str) -> Self {
+        Self { role, content }
+    }
+}
+
 /// A language model that can be used for various NLP tasks.
 pub struct Model {
     device: Device,
@@ -121,22 +135,12 @@ impl Model {
     /// Returns an error if the prompt cannot be tokenized. This can happen if
     /// the model's tokenizer is unable to encode the prompt or the chat
     /// template is invalid.
-    pub fn completions(&mut self, prompt: &str) -> std::io::Result<Completions> {
+    pub fn completions(&mut self, messages: &[ChatMessage]) -> std::io::Result<Completions> {
         use std::io::{Error, ErrorKind};
-
-        #[derive(Serialize)]
-        struct ChatMessage<'role, 'content> {
-            role: &'role str,
-            content: &'content str,
-        }
 
         let Ok(chat_template) = self.template_env.get_template(CHAT_TEMPLATE_NAME) else {
             unreachable!("template `CHAT_TEMPLATE_NAME` always exists")
         };
-        let messages = vec![ChatMessage {
-            role: "user",
-            content: prompt,
-        }];
         let prompt = chat_template
             .render(context!(messages => messages, add_generation_prompt => true))
             .map_err(|e| {

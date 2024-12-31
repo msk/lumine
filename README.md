@@ -56,15 +56,18 @@ Here's a basic example of how to use Lumine to load a model and generate text
 completions:
 
 ```rust
-use lumine::models::llama::Model;
+use lumine::models::llama::{ChatMessage, Model};
 
 fn main() -> std::io::Result<()> {
     // Load the model from a GGUF file
     let mut model = Model::from_path("path/to/model.gguf")?;
 
     // Generate a completion for a given prompt
-    let prompt = "What is the capital of South Korea?";
-    let mut completions = model.completions(prompt)?;
+    let messages = vec![
+        ChatMessage::new("system", "You are a helpful assistant."),
+        ChatMessage::new("user", "What is the capital of South Korea?"),
+    ];
+    let mut completions = model.completions(&messages)?;
 
     // Print the generated text
     while let Some(text) = completions.next() {
@@ -80,10 +83,10 @@ fn main() -> std::io::Result<()> {
 
 Licensed under either of
 
- * Apache License, Version 2.0
-   ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license
-   ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0
+   ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license
+   ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.
 
