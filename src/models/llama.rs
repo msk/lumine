@@ -18,6 +18,7 @@ pub struct ChatMessage<'role, 'content> {
 
 impl<'role, 'content> ChatMessage<'role, 'content> {
     /// Creates a new chat message with the specified role and content.
+    #[must_use]
     pub fn new(role: &'role str, content: &'content str) -> Self {
         Self { role, content }
     }
