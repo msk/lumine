@@ -188,7 +188,7 @@ impl Model {
     /// Returns an error if the question contains invalid tokens.
     pub fn next_probabilities(
         &mut self,
-        prompt: &str,
+        messages: &[ChatMessage],
         tokens: &[&str],
     ) -> std::io::Result<Vec<f32>> {
         use std::io::{Error, ErrorKind};
@@ -196,16 +196,6 @@ impl Model {
         let Ok(chat_template) = self.template_env.get_template(CHAT_TEMPLATE_NAME) else {
             unreachable!("template `CHAT_TEMPLATE_NAME` always exists")
         };
-        let messages = vec![
-            ChatMessage {
-                role: "system",
-                content: "",
-            },
-            ChatMessage {
-                role: "user",
-                content: prompt,
-            },
-        ];
         let prompt = chat_template
             .render(context!(messages => messages, add_generation_prompt => true))
             .map_err(|e| {
