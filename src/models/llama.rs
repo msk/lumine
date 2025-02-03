@@ -142,14 +142,7 @@ impl Model {
         let Ok(chat_template) = self.template_env.get_template(CHAT_TEMPLATE_NAME) else {
             unreachable!("template `CHAT_TEMPLATE_NAME` always exists")
         };
-        let prompt = chat_template
-            .render(context!(messages => messages, add_generation_prompt => true))
-            .map_err(|e| {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    format!("chat template doesn't conform to the expected format: {e}"),
-                )
-            })?;
+        let prompt = prefilled_prompt(&chat_template, messages)?;
 
         let tokens = self
             .tokenizer
@@ -185,7 +178,7 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// Returns an error if the question contains invalid tokens.
+    /// Returns an error if `messages` contain invalid tokens.
     pub fn next_probabilities(
         &mut self,
         messages: &[ChatMessage],
@@ -196,14 +189,7 @@ impl Model {
         let Ok(chat_template) = self.template_env.get_template(CHAT_TEMPLATE_NAME) else {
             unreachable!("template `CHAT_TEMPLATE_NAME` always exists")
         };
-        let prompt = chat_template
-            .render(context!(messages => messages, add_generation_prompt => true))
-            .map_err(|e| {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    format!("chat template doesn't conform to the expected format: {e}"),
-                )
-            })?;
+        let prompt = prefilled_prompt(&chat_template, messages)?;
 
         let tokens = {
             let mut token_ids = Vec::with_capacity(tokens.len());
@@ -338,5 +324,43 @@ impl Iterator for Completions<'_> {
             self.input_pos += 1;
         }
         None
+    }
+}
+
+/// Returns a prompt with the response prefilled if the last message's role is
+/// "assistant".
+///
+/// # Errors
+///
+/// Returns an error if the chat template doesn't conform to the expected format.
+fn prefilled_prompt(
+    template: &minijinja::Template,
+    messages: &[ChatMessage],
+) -> std::io::Result<String> {
+    use std::io::{Error, ErrorKind};
+
+    let Some(last_message) = messages.last() else {
+        return Ok(String::new());
+    };
+    if last_message.role == "assistant" {
+        let messages = &messages[..messages.len() - 1];
+        template
+            .render(context!(messages => messages, add_generation_prompt => true))
+            .map(|s| s + last_message.content)
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("chat template doesn't conform to the expected format: {e}"),
+                )
+            })
+    } else {
+        template
+            .render(context!(messages => messages, add_generation_prompt => true))
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("chat template doesn't conform to the expected format: {e}"),
+                )
+            })
     }
 }
