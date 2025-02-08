@@ -302,6 +302,7 @@ impl Iterator for Completions<'_> {
                     .decode(&self.tokens[..self.last_output_pos], true)
                     .expect("should be valid tokens")
             };
+            self.input_pos = self.tokens.len();
             self.tokens.push(next_token);
             let curr_text = self
                 .tokenizer
@@ -321,7 +322,6 @@ impl Iterator for Completions<'_> {
                 self.tokens.push(next_token);
                 return Some(text.1.to_string());
             }
-            self.input_pos += 1;
         }
         None
     }
