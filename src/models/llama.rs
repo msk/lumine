@@ -169,17 +169,17 @@ impl Model {
         })
     }
 
-    /// Returns the probabilities of the given tokens being the next token in the
-    /// completion of the chat starting with the given prompt.
+    /// Returns the log probabilities of the given tokens being the next token
+    /// in the completion of the chat starting with the given prompt.
     ///
-    /// The n-th element in the returned vector corresponds to the probability
-    /// of the n-th token in the given `tokens` being the next token in the LLM
-    /// completion.
+    /// The n-th element in the returned vector corresponds to the log
+    /// probability of the n-th token in the given `tokens` being the next token
+    /// in the LLM completion.
     ///
     /// # Errors
     ///
     /// Returns an error if `messages` contain invalid tokens.
-    pub fn next_probabilities(
+    pub fn logprobs(
         &mut self,
         messages: &[ChatMessage],
         tokens: &[&str],
@@ -226,7 +226,7 @@ impl Model {
         let logits = logits
             .to_dtype(DType::F32)
             .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?;
-        let prs = candle_nn::ops::softmax_last_dim(&logits)
+        let logprobs = candle_nn::ops::log_softmax(&logits, 0)
             .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?
             .to_vec1::<f32>()
             .map_err(|e| Error::new(ErrorKind::InvalidInput, format!("invalid question: {e}")))?;
@@ -234,7 +234,7 @@ impl Model {
         // Calculate the probability of the answer being "yes"
         let mut token_prs = Vec::with_capacity(tokens.len());
         for token in tokens {
-            let p = *prs
+            let p = *logprobs
                 .get(token as usize)
                 .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "token not in vocab"))?;
             token_prs.push(p);
