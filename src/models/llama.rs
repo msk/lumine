@@ -46,11 +46,46 @@ impl Model {
     pub fn from_path<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<Self> {
         use std::io::{Error, ErrorKind};
 
-        let device = crate::device();
-
         let mut file = std::fs::File::open(&path)?;
         let gguf = gguf_file::Content::read(&mut file)
             .map_err(|e| Error::new(ErrorKind::InvalidData, e.with_path(path)))?;
+
+        Self::from_weights(&mut file, gguf)
+    }
+
+    /// Loads a model from the specified readers.
+    ///
+    /// `weights_offset` is the offset in bytes from the start of the file where
+    /// the weights start.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model header or weights cannot be loaded.
+    pub fn from_readers<HeaderRead, WeightsRead>(
+        header_reader: &mut HeaderRead,
+        weights_reader: &mut WeightsRead,
+        weights_offset: u64,
+    ) -> std::io::Result<Self>
+    where
+        HeaderRead: std::io::Read + std::io::Seek,
+        WeightsRead: std::io::Read + std::io::Seek,
+    {
+        use std::io::{Error, ErrorKind};
+
+        let mut gguf = gguf_file::Content::read(header_reader)
+            .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+        gguf.tensor_data_offset = weights_offset;
+
+        Self::from_weights(weights_reader, gguf)
+    }
+
+    /// Helper function to create a model from weights reader and GGUF content
+    fn from_weights<R: std::io::Read + std::io::Seek>(
+        weights_reader: &mut R,
+        gguf: gguf_file::Content,
+    ) -> std::io::Result<Self> {
+        use std::io::{Error, ErrorKind};
+
         let tokenizer_json = gguf
             .metadata
             .get("tokenizer.huggingface.json")
@@ -112,7 +147,8 @@ impl Model {
                 )
             })?;
 
-        let weights = ModelWeights::from_gguf(gguf, &mut file, &device).map_err(|e| {
+        let device = crate::device();
+        let weights = ModelWeights::from_gguf(gguf, weights_reader, &device).map_err(|e| {
             Error::new(
                 ErrorKind::InvalidData,
                 format!("invalid model weights: {e}"),
