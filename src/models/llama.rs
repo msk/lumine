@@ -1,4 +1,4 @@
-use candle_core::{quantized::gguf_file, DType, Device, Tensor};
+use candle_core::{DType, Device, Tensor, quantized::gguf_file};
 use candle_transformers::{
     generation::{LogitsProcessor, Sampling},
     models::quantized_llama::ModelWeights,

@@ -7,8 +7,8 @@
 pub mod models;
 
 use candle_core::{
-    utils::{cuda_is_available, metal_is_available},
     Device,
+    utils::{cuda_is_available, metal_is_available},
 };
 
 fn device() -> Device {
