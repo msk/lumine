@@ -101,6 +101,60 @@ impl Model {
         })
     }
 
+    /// Creates a new BERT model from byte slices.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - A byte slice containing the model configuration.
+    /// * `tokenizer` - A byte slice containing the tokenizer data.
+    /// * `weights` - A byte slice containing the model weights in safetensors format.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the buffers are invalid or loading fails.
+    pub fn from_slices(config: &[u8], tokenizer: &[u8], weights: &[u8]) -> io::Result<Self> {
+        let device = crate::device();
+
+        let config: Config = serde_json::from_slice(config).map_err(|e| {
+            IoError::new(
+                ErrorKind::InvalidData,
+                format!("Failed to parse config buffer: {e}"),
+            )
+        })?;
+
+        let mut tokenizer = Tokenizer::from_bytes(tokenizer).map_err(|e| {
+            IoError::new(
+                ErrorKind::Other,
+                format!("Failed to load tokenizer from buffer: {e}"),
+            )
+        })?;
+        let pp = PaddingParams {
+            strategy: tokenizers::PaddingStrategy::BatchLongest,
+            ..Default::default()
+        };
+        tokenizer.with_padding(Some(pp));
+
+        let vb = VarBuilder::from_slice_safetensors(weights, DTYPE, &device).map_err(|e| {
+            IoError::new(
+                ErrorKind::Other,
+                format!("Failed to load weights from buffer: {e}"),
+            )
+        })?;
+        let weights = BertModel::load(vb, &config).map_err(|e| {
+            IoError::new(
+                ErrorKind::Other,
+                format!("Failed to load BertModel from VarBuilder and config: {e}"),
+            )
+        })?;
+
+        println!("Model loaded successfully from buffers."); // Optional: Logging
+        Ok(Self {
+            device,
+            tokenizer,
+            weights,
+        })
+    }
+
     /// Returns the embedding for the given text.
     ///
     /// # Errors
