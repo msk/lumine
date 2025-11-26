@@ -172,7 +172,7 @@ impl Model {
     /// Returns an error if the prompt cannot be tokenized. This can happen if
     /// the model's tokenizer is unable to encode the prompt or the chat
     /// template is invalid.
-    pub fn completions(&mut self, messages: &[ChatMessage]) -> std::io::Result<Completions> {
+    pub fn completions(&mut self, messages: &[ChatMessage]) -> std::io::Result<Completions<'_>> {
         use std::io::{Error, ErrorKind};
 
         let Ok(chat_template) = self.template_env.get_template(CHAT_TEMPLATE_NAME) else {
