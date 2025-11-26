@@ -20,10 +20,10 @@ fn device() -> Device {
         }
     }
 
-    if metal_is_available() {
-        if let Ok(device) = Device::new_metal(0) {
-            return device;
-        }
+    if metal_is_available()
+        && let Ok(device) = Device::new_metal(0)
+    {
+        return device;
     }
 
     Device::Cpu

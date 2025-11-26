@@ -139,7 +139,7 @@ impl Model {
             })?;
         let mut template_env = minijinja::Environment::new();
         template_env
-            .add_template_owned(CHAT_TEMPLATE_NAME.to_string(), chat_template.to_string())
+            .add_template_owned(CHAT_TEMPLATE_NAME.to_string(), chat_template.clone())
             .map_err(|e| {
                 Error::new(
                     ErrorKind::InvalidData,
